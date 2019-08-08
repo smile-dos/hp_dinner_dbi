@@ -2,7 +2,7 @@ from kombu import Connection, Queue
 from kombu.mixins import ConsumerProducerMixin
 import pickle
 from data_service.database import Base
-from data_service.utils import constant
+from data_service.utils import exception
 
 
 class Worker(ConsumerProducerMixin):
@@ -22,7 +22,6 @@ class Worker(ConsumerProducerMixin):
         )]
 
     def on_request(self, message):
-        result = None
         try:
             payload = message.payload
             func_name, args, kwargs = pickle.loads(payload)
@@ -30,27 +29,19 @@ class Worker(ConsumerProducerMixin):
                 dbi_obj = self.dbi_class(database_url=self.database_url)
                 if hasattr(dbi_obj, func_name):
                     func = getattr(dbi_obj, func_name)
-                    result = func(*args, **kwargs)
+                    result = pickle.dumps(func(*args, **kwargs))
                 else:
-                    result = {
-                        "code": constant.ErrCode.ERR_RPC_HAS_NOT_METHOD,
-                        "message": "Dbi class has not method named: {}".format(func_name)
-                    }
+                    e = exception.RpcHasNotMethod("Rpc has not method named: {}".format(func_name))
+                    result = pickle.dumps(e)
             else:
-                result = {
-                    "code": constant.ErrCode.ERR_RPC_NOT_SUBCLASS,
-                    "message": "Error not subclass error for class {}".format(self.dbi_class)
-                }
+                result = pickle.dumps(exception.NotImplementBaseClass("{} is not sub class of Base".format(self.dbi_class)))
         except Exception as e:
-            result = {
-                "code": constant.ErrCode.ERR_UNKNOWN,
-                "message": str(e)
-            }
+            result = pickle.dumps(e)
         self.producer.publish(
-            {'result': result},
+            result,
             exchange='', routing_key=message.properties['reply_to'],
             correlation_id=message.properties['correlation_id'],
-            serializer='json',
+            serializer='pickle',
             retry=True,
         )
         message.ack()

@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 from data_service.database import models
 from data_service.utils import constant
+from data_service.database import execption
 
 
 class Dbi(database.Base):
@@ -30,11 +31,7 @@ class Dbi(database.Base):
         try:
             user = session.query(models.User).filter(models.User.username == username).first()
             if user is None:
-                msg = {
-                    "code": constant.ErrCode.ERR_USERNAME_NOT_FOUND,
-                    "message": "Username not found."
-                }
-                return msg
+                raise execption.UsernameNotFound("Username not found.")
             msg = {
                 "code": constant.ErrCode.ERR_OK,
                 "message": "Select success",
@@ -54,12 +51,8 @@ class Dbi(database.Base):
                 }
             }
             return msg
-        except Exception as e:
-            msg = {
-                "code": constant.ErrCode.ERR_UNKNOWN,
-                "message": str(e)
-            }
-            return msg
+        except Exception:
+            raise
         finally:
             session.close()
 
