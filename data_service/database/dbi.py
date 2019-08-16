@@ -2,9 +2,12 @@ from data_service import database
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
+from sqlalchemy import exc as sc_exc
+from sqlalchemy import desc
 from data_service.database import models
 from data_service.utils import constant
 from data_service.database import execption
+from data_service.utils.page import paginate
 
 
 class Dbi(database.Base):
@@ -96,5 +99,70 @@ class Dbi(database.Base):
                 "message": str(e)
             }
             return msg
+        finally:
+            session.close()
+
+    def create_user(self, username, password):
+        """
+        Create user by username and password
+        :param username: [str] username
+        :param password: [str] password with hashed
+        :return:
+        """
+        session = self.__session()
+        try:
+            user = models.User()
+            user.username = username
+            user.password = password
+            session.add(user)
+            session.commit()
+            msg = {
+                "code": constant.ErrCode.ERR_OK,
+                "message": "Create user success"
+            }
+            return msg
+        except sc_exc.IntegrityError:
+            raise execption.UsernameAlreadyExist()
+        except Exception:
+            raise
+        finally:
+            session.close()
+
+    def select_user_list_by_page(self, page=1, page_size=20, keyword=None, sort_column=None, sort_type=None):
+        """
+        Select user list
+        :param page: [int] Page number
+        :param page_size: [int] Number items in one page
+        :param keyword: [str] Keyword
+        :param sort_column: [str] Order by column name
+        :param sort_type: [str] Order by asc or desc
+        :return:
+        """
+        session = self.__session()
+        try:
+            query = session.query(models.User).filter()
+            if keyword:
+                query.filter(models.User.username.like("%{}%".format(keyword)))
+
+            if sort_column:
+                if hasattr(models.User, sort_column):
+                    sort_column_attr = getattr(models.User, sort_column)
+                    print(sort_type)
+                    if sort_type:
+                        pass
+            else:
+                query = query.order_by(desc(models.User.create_at))
+            items = paginate(query=query, page=page, per_page=page_size).items
+            user_list = []
+            for item in items:
+                user_list.append({
+                    "id": item.id,
+                    "username": item.username,
+                    "is_superuser": item.is_superuser,
+                    "is_active": item.is_active
+                })
+            return user_list
+        except Exception:
+            raise
         finally:
             session.close()
