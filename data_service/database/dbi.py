@@ -128,40 +128,47 @@ class Dbi(database.Base):
         finally:
             session.close()
 
-    def select_user_list_by_page(self, page=1, page_size=20, keyword=None, sort_column=None, sort_type=None):
+    def select_user_list_by_page(self, page=1, page_size=20, keyword=None, sort_name=None, sort_order=None):
         """
         Select user list
         :param page: [int] Page number
         :param page_size: [int] Number items in one page
         :param keyword: [str] Keyword
-        :param sort_column: [str] Order by column name
-        :param sort_type: [str] Order by asc or desc
+        :param sort_name: [str] Order by column name
+        :param sort_order: [str] Order by asc or desc
         :return:
         """
         session = self.__session()
         try:
             query = session.query(models.User).filter()
             if keyword:
-                query.filter(models.User.username.like("%{}%".format(keyword)))
+                query = query.filter(models.User.username.like("%{}%".format(keyword)))
 
-            if sort_column:
-                if hasattr(models.User, sort_column):
-                    sort_column_attr = getattr(models.User, sort_column)
-                    print(sort_type)
-                    if sort_type:
-                        pass
+            if sort_name:
+                if hasattr(models.User, sort_name):
+                    sort_column_attr = getattr(models.User, sort_name)
+                    if sort_order == "descending":
+                        query.order_by(desc(sort_column_attr))
+                    elif sort_order == "ascending":
+                        query.order_by(sort_column_attr)
             else:
                 query = query.order_by(desc(models.User.create_at))
-            items = paginate(query=query, page=page, per_page=page_size).items
+            page_info = paginate(query=query, page=page, per_page=page_size)
             user_list = []
-            for item in items:
+            for item in page_info.items:
                 user_list.append({
                     "id": item.id,
                     "username": item.username,
                     "is_superuser": item.is_superuser,
-                    "is_active": item.is_active
+                    "is_active": item.is_active,
+                    "create_at": item.create_at.strftime("%Y-%y-%d %H:%M"),
+                    "update_at": item.update_at.strftime("%Y-%y-%d %H:%M")
                 })
-            return user_list
+            msg = {
+                "total": page_info.total,
+                "list": user_list
+            }
+            return msg
         except Exception:
             raise
         finally:
